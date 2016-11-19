@@ -36,9 +36,77 @@ public class FTPClientConsole {
         try {
             ftpClient = new FTPClient(host, port);
         } catch (Exception e) {
-            System.out.println(String.format("Cannot connect to %s:%d! Terminated", host, port));
+            System.out.println(String.format("Cannot connect to %s:%d! Terminated.", host, port));
         }
 
-        
+        System.out.println();
+
+        // Username
+        String username;
+        boolean success = false;
+
+        System.out.print("Username: ");
+        username = scanConsole.nextLine();
+
+        try {
+            success = ftpClient.loginWithUsername(username);
+        } catch (Exception e) {
+            System.out.println("Error sending username to server! Terminated.");
+            return;
+        }
+
+        if (!success) {
+            System.out.println("Invalid username! Terminated.");
+            ftpClient.close();
+            return;
+        }
+
+        // It has been logged in already
+        if (ftpClient.isLoggedIn()) {
+            startMainSession();
+            return;
+        }
+
+        // Otherwise, password is required
+        String password;
+
+        System.out.print("Password: ");
+        password = scanConsole.nextLine();
+
+        try {
+            success = ftpClient.loginWithPassword(password);
+        } catch (Exception e) {
+            System.out.println("Error sending password to server! Terminated.");
+            ftpClient.close();
+            return;
+        }
+
+        if (success && ftpClient.isLoggedIn()) {
+            System.out.println("\nLogin is successful!\n");
+        } else {
+            System.out.println("Invalid username! Terminated.");
+            ftpClient.close();
+            return;
+        }
+
+        startMainSession();
     }
+
+
+
+    private static void startMainSession() {
+        String command;
+
+        while (ftpClient.isLoggedIn()) {
+            System.out.println("> ");
+            command = scanConsole.nextLine().trim();
+
+            if (command.equals("")) {
+                continue;
+            }
+
+            ftpClient.executeCommand(command);
+        }
+    }
+
 }
