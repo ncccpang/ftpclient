@@ -45,6 +45,8 @@ public class FTPClient {
 
 
     private static class FTPResponseCode {
+        public static final int SIGNAL_DATA_CONNECTION_OPEN = 150;
+
         public static final int LOGGED_IN = 230;
         public static final int LOGGED_OUT = 221;
         public static final int ACTION_DONE = 250;
@@ -60,6 +62,7 @@ public class FTPClient {
         public static final int SYNTAX_ERROR = 501;
 
         private static final List<Integer> RESPONSE_CODES = Arrays.asList(new Integer[] {
+                150,
                 230, 221, 250, 226, 200,
                 331,
                 421, 425, 426,
