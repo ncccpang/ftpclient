@@ -99,7 +99,7 @@ public class FTPClient {
         socket = new Socket(host, port);
 
         inputStream = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        outputStream = new PrintWriter(socket.getOutputStream(), true);
+        outputStream = new PrintWriter(socket.getOutputStream());
 
         hasLoggedIn = false;
         userNameProvided = false;
