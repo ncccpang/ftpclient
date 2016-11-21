@@ -102,7 +102,7 @@ public class FTPClient {
         socket = new Socket(host, port);
 
         inputStream = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-        outputStream = new PrintWriter(socket.getOutputStream());
+        outputStream = new PrintWriter(socket.getOutputStream(), true);
 
         hasLoggedIn = false;
         userNameProvided = false;
@@ -197,7 +197,7 @@ public class FTPClient {
 
     public void close() {
         try {
-            outputStream.print("QUIT");
+            outputStream.println("QUIT");
 
             inputStream.close();
             outputStream.close();

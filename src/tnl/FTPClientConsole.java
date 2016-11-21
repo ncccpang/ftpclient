@@ -27,8 +27,12 @@ public class FTPClientConsole {
 
         try {
             port = scanConsole.nextInt();
+
+            // Consume the '\n' character in order to prepare for the next nextLine()
+            scanConsole.nextLine();
         } catch (Exception e) {
             System.out.println("\nInvalid port number! Terminated.");
+
             return;
         }
 
@@ -37,6 +41,8 @@ public class FTPClientConsole {
             ftpClient = new FTPClient(host, port);
         } catch (Exception e) {
             System.out.println(String.format("Cannot connect to %s:%d! Terminated.", host, port));
+
+            return;
         }
 
         System.out.println();
@@ -52,17 +58,22 @@ public class FTPClientConsole {
             success = ftpClient.loginWithUsername(username);
         } catch (Exception e) {
             System.out.println("Error sending username to server! Terminated.");
+
+            ftpClient.close();
             return;
         }
 
         if (!success) {
             System.out.println("Invalid username! Terminated.");
+
             ftpClient.close();
             return;
         }
 
         // It has been logged in already
         if (ftpClient.isLoggedIn()) {
+            System.out.println("\nLogin is successful!\n");
+
             startMainSession();
             return;
         }
@@ -77,6 +88,7 @@ public class FTPClientConsole {
             success = ftpClient.loginWithPassword(password);
         } catch (Exception e) {
             System.out.println("Error sending password to server! Terminated.");
+
             ftpClient.close();
             return;
         }
@@ -85,6 +97,7 @@ public class FTPClientConsole {
             System.out.println("\nLogin is successful!\n");
         } else {
             System.out.println("Invalid username! Terminated.");
+
             ftpClient.close();
             return;
         }
@@ -98,7 +111,7 @@ public class FTPClientConsole {
         String command;
 
         while (ftpClient.isLoggedIn()) {
-            System.out.println("> ");
+            System.out.print("> ");
             command = scanConsole.nextLine().trim();
 
             if (command.equals("")) {
