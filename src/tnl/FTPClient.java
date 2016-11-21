@@ -207,12 +207,13 @@ public class FTPClient {
             // Silently ignore the excception
         }
 
+        hasLoggedIn = false;
     }
 
 
 
     public void executeCommand(String command) {
-
+        close();
     }
 
 }
