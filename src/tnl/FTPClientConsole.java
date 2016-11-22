@@ -1,5 +1,8 @@
 package tnl;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Scanner;
 import tnl.FTPClient;
 
@@ -14,12 +17,13 @@ public class FTPClientConsole {
     public static void main(String[] argv) {
         String host;
         int port;
+        String clientDirectory;
 
         System.out.println("FTP Client");
         System.out.println("----------");
         System.out.println("");
 
-        // Input Host & Port
+        // Input Host, Port, Client directory
         System.out.print("Host IP/domain name: ");
         host = scanConsole.nextLine();
 
@@ -36,9 +40,24 @@ public class FTPClientConsole {
             return;
         }
 
+        System.out.println("Absolute path to Client base directory: ");
+        clientDirectory = scanConsole.nextLine();
+
+        try {
+            if (!Files.isDirectory(Paths.get(clientDirectory))) {
+                System.out.println("Invalid path! Terminated");
+
+                return;
+            }
+        } catch (Exception e) {
+            System.out.println("Invalid path! Terminated");
+
+            return;
+        }
+
         // Try connecting to server
         try {
-            ftpClient = new FTPClient(host, port);
+            ftpClient = new FTPClient(host, port, clientDirectory);
         } catch (Exception e) {
             System.out.println(String.format("Cannot connect to %s:%d! Terminated.", host, port));
 
@@ -59,21 +78,17 @@ public class FTPClientConsole {
         } catch (Exception e) {
             System.out.println("Error sending username to server! Terminated.");
 
-            ftpClient.close();
             return;
         }
 
         if (!success) {
             System.out.println("Invalid username! Terminated.");
 
-            ftpClient.close();
             return;
         }
 
         // It has been logged in already
         if (ftpClient.isLoggedIn()) {
-            System.out.println("\nLogin is successful!\n");
-
             startMainSession();
             return;
         }
@@ -89,16 +104,12 @@ public class FTPClientConsole {
         } catch (Exception e) {
             System.out.println("Error sending password to server! Terminated.");
 
-            ftpClient.close();
             return;
         }
 
-        if (success && ftpClient.isLoggedIn()) {
-            System.out.println("\nLogin is successful!\n");
-        } else {
-            System.out.println("Invalid username! Terminated.");
+        if (!success || !ftpClient.isLoggedIn()) {
+            System.out.println("Invalid password! Terminated.");
 
-            ftpClient.close();
             return;
         }
 
@@ -108,6 +119,10 @@ public class FTPClientConsole {
 
 
     private static void startMainSession() {
+        System.out.println("\nLogin is successful!\n");
+        System.out.println("Type help/h/H for help");
+        System.out.println("Type exit to exit the program");
+
         String command;
 
         while (ftpClient.isLoggedIn()) {
@@ -118,7 +133,38 @@ public class FTPClientConsole {
                 continue;
             }
 
-            ftpClient.executeCommand(command);
+            if (command.equals("h") || command.equals("help") || command.equals("H")) {
+                System.out.println("ls                  List the files/directories in server");
+                System.out.println("cd                  Navigate to the base directory in server");
+                System.out.println("cd  <path>          Navigate to a directory in server");
+                System.out.println("cd ..               Navigate to the parent directory of the current directory in server");
+                System.out.println("mkdir <dir_name>    Create a new directory");
+                System.out.println("rm <path>           Remove a file or an empty directory");
+                System.out.println("get <file_name>     Download a file");
+                System.out.println("put <file_name>     Upload a file");
+                System.out.println("help                Get help");
+                System.out.println("exit                Exit the program");
+
+                continue;
+            }
+
+            if (command.equals("exit")) {
+                System.out.print("Closing connection");
+
+                ftpClient.close();
+                return;
+            }
+
+            try {
+                ftpClient.executeCommand(command);
+            } catch (InvalidCommandException e) {
+                System.out.println("Invalid command!");
+            } catch (AutoTerminatedException e) {
+                System.out.println(String.format("%s! Connection automatically terminated", e.getMessage()));
+
+                return;
+            }
+
         }
     }
 
