@@ -178,6 +178,8 @@ public class FTPClient {
 
     private final Charset ENCODING_UTF8 = Charset.forName("UTF-8");
 
+    private final int BUFFER_SIZE = 1024;
+
 
 
     private Scanner scanConsole;
@@ -328,7 +330,7 @@ public class FTPClient {
 
     }
 
-    private FTPResponse getResponse() throws Exception {
+    private FTPResponse getResponse() throws AutoTerminatedException {
         String response;
         FTPResponse ftpResponse;
 
@@ -432,6 +434,7 @@ public class FTPClient {
 
         Socket dataSocket;
         DataInputStream dataInputStream;
+        byte[] buffer = new byte[BUFFER_SIZE];
 
         try {
             dataSocket = establishDataConnection();
@@ -441,6 +444,63 @@ public class FTPClient {
             return;
         }
 
+        int byteReceived;
+        int errorOccured = 0;
+
+        while (true) {
+            try {
+                byteReceived = dataInputStream.read(buffer, 0, BUFFER_SIZE);
+            } catch (Exception e) {
+                errorOccured = 1;
+                break;
+            }
+
+            if (byteReceived == -1) {
+                break;
+            }
+
+            try {
+                fileOutStream.write(buffer, 0, byteReceived);
+            } catch (Exception e) {
+                errorOccured = 2;
+                break;
+            }
+
+        }
+
+        if (errorOccured == 0) {
+            try {
+                fileOutStream.flush();
+            } catch (Exception e) {
+                errorOccured = 2;
+            }
+
+        }
+
+        try {
+            fileOutStream.close();
+
+            dataInputStream.close();
+            dataSocket.close();
+        } catch (Exception e) {
+            // Silently ignore this error
+        }
+
+        if (errorOccured == 0) {
+            System.out.println("File downloaded successfully!");
+        }
+
+        // Expect to get FTP 226 response from server
+        ftpResponse = getResponse();
+
+        if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        }
+
+        if (ftpResponse.code != FTPResponseCode.DATA_TRANSFER_COMPLETED) {
+            throw new AutoTerminatedException("Invalid response from server");
+        }
 
     }
 
