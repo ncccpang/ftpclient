@@ -1,6 +1,7 @@
 package tnl;
 
 import java.io.*;
+import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
@@ -8,8 +9,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Scanner;
 
 import com.sun.deploy.util.ArrayUtil;
+import com.sun.deploy.util.SyncFileAccess;
 import tnl.InvalidCommandException;
 
 
@@ -177,6 +180,8 @@ public class FTPClient {
 
 
 
+    private Scanner scanConsole;
+
     private String host;
     private int port;
     private int dataPort;
@@ -205,6 +210,8 @@ public class FTPClient {
 
         hasLoggedIn = false;
         userNameProvided = false;
+
+        scanConsole = new Scanner(System.in);
     }
 
 
@@ -321,7 +328,7 @@ public class FTPClient {
 
     }
 
-    private FTPResponse getResponse() throws AutoTerminatedException {
+    private FTPResponse getResponse() throws Exception {
         String response;
         FTPResponse ftpResponse;
 
@@ -342,11 +349,34 @@ public class FTPClient {
         return ftpResponse;
     }
 
+    private Socket establishDataConnection() throws Exception {
+        ServerSocket serverDataSocket = new ServerSocket(dataPort);
+        serverDataSocket.setSoTimeout(4000);
+
+        Socket dataSocket = serverDataSocket.accept();
+
+        return dataSocket;
+    }
+
     private void downloadFile(ArrayList<String> commandArugments)
             throws InvalidCommandException, AutoTerminatedException
     {
         if (commandArugments.size() != 1) {
             throw new InvalidCommandException();
+        }
+
+        File fileOut = clientDirectory.resolve(commandArugments.get(0)).toFile();
+
+        // See if user wants to overwite already-existing ile.
+        if (fileOut.exists()) {
+            System.out.print("This file has already existed in your computer. Do you want to overwrite it (Y/N)? ");
+
+            String overwrite = scanConsole.nextLine().trim().toLowerCase();
+
+            if (overwrite.equals("n")) {
+                return;
+            }
+
         }
 
         FTPResponse ftpResponse;
@@ -380,9 +410,35 @@ public class FTPClient {
             throw new AutoTerminatedException("Server automatically logged out");
         }
 
+        // File not exist on server. Terminated
+        if (ftpResponse.code == FTPResponseCode.REQUEST_FILE_ACTION_FAILED) {
+            System.out.println("This file does not exist on server!");
+            return;
+        }
+
         if (ftpResponse.code != FTPResponseCode.SIGNAL_DATA_CONNECTION_OPEN) {
             close();
             throw new AutoTerminatedException("Invalid response from server");
+        }
+
+        FileOutputStream fileOutStream;
+
+        try {
+            fileOutStream = new FileOutputStream(fileOut);
+        } catch (Exception e) {
+            System.out.println("Error creating file in your computer!");
+            return;
+        }
+
+        Socket dataSocket;
+        DataInputStream dataInputStream;
+
+        try {
+            dataSocket = establishDataConnection();
+            dataInputStream = new DataInputStream(dataSocket.getInputStream());
+        } catch (Exception e) {
+            System.out.println("Error establishing data connection!");
+            return;
         }
 
 
