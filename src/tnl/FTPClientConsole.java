@@ -134,16 +134,16 @@ public class FTPClientConsole {
             }
 
             if (command.equals("h") || command.equals("help") || command.equals("H")) {
-                System.out.println("ls                  List the files/directories in server");
-                System.out.println("cd                  Navigate to the base directory in server");
-                System.out.println("cd  <path>          Navigate to a directory in server");
-                System.out.println("cd ..               Navigate to the parent directory of the current directory in server");
-                System.out.println("mkdir <dir_name>    Create a new directory");
-                System.out.println("rm <path>           Remove a file or an empty directory");
-                System.out.println("get <file_name>     Download a file");
-                System.out.println("put <file_name>     Upload a file");
-                System.out.println("help                Get help");
-                System.out.println("exit                Exit the program");
+                System.out.println("ls                                          List the files/directories in server");
+                System.out.println("cd                                          Navigate to the base directory in server");
+                System.out.println("cd  <path>                                  Navigate to a directory in server");
+                System.out.println("cd ..                                       Navigate to the parent directory of the current directory in server");
+                System.out.println("mkdir <dir_name>                            Create a new directory");
+                System.out.println("rm <path>                                   Remove a file or an empty directory");
+                System.out.println("get <file_name> (<file_name_on_local>)      Download a file to client (optionally, under a new name)");
+                System.out.println("put <file_name> (<file_name_on_server>)     Upload a file to server (optionally,  under a new name)");
+                System.out.println("help                                        Get help");
+                System.out.println("exit                                        Exit the program");
 
                 continue;
             }

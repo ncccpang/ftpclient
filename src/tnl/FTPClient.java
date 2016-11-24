@@ -11,11 +11,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Scanner;
 
-import com.sun.deploy.util.ArrayUtil;
-import com.sun.deploy.util.SyncFileAccess;
-import tnl.InvalidCommandException;
-
-
 
 public class FTPClient {
     private class FTPResponse {
@@ -57,7 +52,7 @@ public class FTPClient {
 
         public static final int LOGGED_IN = 230;
         public static final int LOGGED_OUT = 221;
-        public static final int ACTION_DONE = 250;
+        public static final int REQUEST_ACTION_DONE = 250;
         public static final int DATA_TRANSFER_COMPLETED = 226;
         public static final int DATA_CONNECTION_OPEN_DONE = 200;
 
@@ -67,6 +62,7 @@ public class FTPClient {
         public static final int DATA_CONNECTION_OPEN_FAILED = 425;
         public static final int DATA_TRANSFER_ERROR = 426;
         public static final int REQUEST_FILE_ACTION_FAILED = 450;
+        public static final int REQUEST_ACTION_FAILED = 451;
 
         public static final int SYNTAX_ERROR = 501;
 
@@ -74,7 +70,7 @@ public class FTPClient {
                 150,
                 230, 221, 250, 226, 200,
                 331,
-                421, 425, 426, 450,
+                421, 425, 426, 450, 451,
                 501
         });
 
@@ -94,8 +90,11 @@ public class FTPClient {
 
         public static final String OPEN_DATA_CONNECTION = "PORT";
 
+        public static final String MAKE_NEW_DIRECTORY = "MKD";
         public static final String LIST_FILE_DIRECTORY = "LIST";
         public static final String GOTO_DIRECTORY = "CWD";
+
+        public static final String DELETE = "DELE";
 
         public static final String DOWNLOAD_FILE = "RETR";
         public static final String UPLOAD_FILE_NO_OVERWITE = "STOU";
@@ -317,6 +316,8 @@ public class FTPClient {
             downloadFile(clientCommand.arguments);
         } else if (clientCommand.code.equals("put")) {
             uploadFile(clientCommand.arguments);
+        } else if (clientCommand.code.equals("rm")) {
+            deletePath(clientCommand.arguments);
         }
 
     }
@@ -370,15 +371,25 @@ public class FTPClient {
     private void downloadFile(ArrayList<String> commandArguments)
             throws InvalidCommandException, AutoTerminatedException
     {
-        if (commandArguments.size() != 1) {
+        if (commandArguments.size() < 1 || commandArguments.size() > 2) {
             throw new InvalidCommandException();
         }
 
-        File fileRetrieved = clientDirectory.resolve(commandArguments.get(0)).toFile();
+        String fileNameOnServer = commandArguments.get(0);
+
+        String fileNameOnLocal = fileNameOnServer;
+        if (commandArguments.size() == 2) {
+            fileNameOnLocal = commandArguments.get(1);
+        }
+
+        File fileRetrieved = clientDirectory.resolve(fileNameOnLocal).toFile();
 
         // See if user wants to overwite already-existing ile.
         if (fileRetrieved.exists()) {
-            System.out.print("This file has already existed in your computer. Do you want to overwrite it (Y/N)? ");
+            System.out.print(String.format(
+                    "File '%s' is already existed in your computer. Do you want to overwrite it (Y/N)? ",
+                    fileNameOnLocal
+            ));
 
             String overwrite = scanConsole.nextLine().trim().toLowerCase();
 
@@ -410,7 +421,7 @@ public class FTPClient {
         }
 
         // Send real File-Downloading request
-        sendRequest(FTPRequestCode.DOWNLOAD_FILE + " " + commandArguments.get(0));
+        sendRequest(FTPRequestCode.DOWNLOAD_FILE + " " + fileNameOnServer);
 
         ftpResponse = getResponse();
 
@@ -421,7 +432,11 @@ public class FTPClient {
 
         // File not exist on server. Terminated
         if (ftpResponse.code == FTPResponseCode.REQUEST_FILE_ACTION_FAILED) {
-            System.out.println("This file does not exist on server!");
+            System.out.println(String.format(
+                    "File '%s' does not exist on server!",
+                    fileNameOnServer
+            ));
+
             return;
         }
 
@@ -440,18 +455,16 @@ public class FTPClient {
         }
 
         Socket dataSocket = null;
-        DataInputStream socketInpStream = null;
+        DataInputStream dataSocketInpStream = null;
         byte[] buffer = new byte[BUFFER_SIZE];
 
         try {
             dataSocket = establishDataConnection();
-            socketInpStream = new DataInputStream(dataSocket.getInputStream());
+            dataSocketInpStream = new DataInputStream(dataSocket.getInputStream());
         } catch (Exception e) {
             try {
-                e.printStackTrace();
-
                 // Close data socket
-                socketInpStream.close();
+                dataSocketInpStream.close();
                 dataSocket.close();
 
                 fileRetrievedOutStream.close();
@@ -468,9 +481,9 @@ public class FTPClient {
 
         while (true) {
             try {
-                byteReceived = socketInpStream.read(buffer, 0, BUFFER_SIZE);
+                byteReceived = dataSocketInpStream.read(buffer, 0, BUFFER_SIZE);
             } catch (Exception e) {
-                errorOccured = 1;
+                errorOccured = 2;
                 break;
             }
 
@@ -480,18 +493,10 @@ public class FTPClient {
 
             try {
                 fileRetrievedOutStream.write(buffer, 0, byteReceived);
-            } catch (Exception e) {
-                errorOccured = 2;
-                break;
-            }
-
-        }
-
-        if (errorOccured == 0) {
-            try {
                 fileRetrievedOutStream.flush();
             } catch (Exception e) {
-                errorOccured = 2;
+                errorOccured = 1;
+                break;
             }
 
         }
@@ -499,22 +504,22 @@ public class FTPClient {
         try {
             fileRetrievedOutStream.close();
 
-            socketInpStream.close();
+            dataSocketInpStream.close();
             dataSocket.close();
         } catch (Exception e) {
             // Silently ignore this error
         }
 
-        if (errorOccured == 2) {
+        if (errorOccured == 1) {
             System.out.println("Error saving downloaded file to computer!");
-        } else if (errorOccured == 1) {
+        } else if (errorOccured == 2) {
             System.out.println("Error retrieving file data from server!");
         }
 
         ftpResponse = getResponse();
 
         // File download succesfully, without any error
-        if (ftpResponse.code == FTPResponseCode.DATA_TRANSFER_COMPLETED) {
+        if (ftpResponse.code == FTPResponseCode.DATA_TRANSFER_COMPLETED && errorOccured == 0) {
             System.out.println(String.format("File '%s' has been downloaded successfully", commandArguments.get(0)));
             return;
         }
@@ -526,13 +531,14 @@ public class FTPClient {
             // Silently ignore the exception
         }
 
-        if (ftpResponse.code == FTPResponseCode.DATA_CONNECTION_OPEN_FAILED) {
+        if (ftpResponse.code == FTPResponseCode.DATA_TRANSFER_ERROR) {
             System.out.println("Error retrieving file data from server!");
             return;
         } else if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
             close();
             throw new AutoTerminatedException("Server automatically logged out");
         } else {
+            close();
             throw new AutoTerminatedException("Invalid response from server");
         }
 
@@ -541,17 +547,24 @@ public class FTPClient {
     private void uploadFile(ArrayList<String> commandArguments)
             throws InvalidCommandException, AutoTerminatedException
     {
-        if (commandArguments.size() != 1) {
+        if (commandArguments.size() < 1 || commandArguments.size() > 2) {
             throw new InvalidCommandException();
         }
 
-        File fileUploaded = clientDirectory.resolve(commandArguments.get(0)).toFile();
+        String fileNameOnLocal = commandArguments.get(0);
+
+        String fileNameOnServer = fileNameOnLocal;
+        if (commandArguments.size() == 2) {
+            fileNameOnServer = commandArguments.get(1);
+        }
+
+        File fileUploaded = clientDirectory.resolve(fileNameOnLocal).toFile();
 
         // See if the uploaded file exists or not
         if (!fileUploaded.exists()) {
             System.out.print(String.format(
                     "File '%s' does not exist in your client directory!",
-                    commandArguments.get(0)
+                    fileNameOnLocal
             ));
 
             return;
@@ -579,6 +592,188 @@ public class FTPClient {
         }
 
         // Try sending upload-no-overwrite request first
+        sendRequest(FTPRequestCode.UPLOAD_FILE_NO_OVERWITE + " " + fileNameOnServer);
+
+        ftpResponse = getResponse();
+
+        if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        }
+
+        // File already exist on server. Ask user if they want to overwrite it or not
+        if (ftpResponse.code != FTPResponseCode.SIGNAL_DATA_CONNECTION_OPEN) {
+            if (ftpResponse.code != FTPResponseCode.REQUEST_FILE_ACTION_FAILED) {
+                close();
+                throw new AutoTerminatedException("Invalid response from server");
+            }
+
+            String overwrite;
+
+            System.out.print(String.format(
+                    "File '%s' already exists on the server. Do you want to overwrite it (Y/N)? ",
+                    fileNameOnServer
+            ));
+
+            overwrite = scanConsole.nextLine().trim().toUpperCase();
+
+            if (overwrite.equals("N")) {
+                return;
+            }
+
+            // If user wants to overwrite the file on the server, then send upload-overwrite request
+            sendRequest(FTPRequestCode.UPLOAD_FILE_OVERWRITE + " " + fileNameOnServer);
+
+            ftpResponse = getResponse();
+
+            if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+                close();
+                throw new AutoTerminatedException("Server automatically logged out");
+            }
+
+            if (ftpResponse.code != FTPResponseCode.SIGNAL_DATA_CONNECTION_OPEN) {
+                close();
+                throw new AutoTerminatedException("Invalid response from server");
+            }
+
+        }
+
+        FileInputStream fileUploadedInStream;
+
+        try {
+            fileUploadedInStream = new FileInputStream(fileUploaded);
+        } catch (Exception e) {
+            System.out.println("Error accessing file in your computer!");
+            return;
+        }
+
+        Socket dataSocket = null;
+        DataOutputStream dataSocketOutStream = null;
+        byte[] buffer = new byte[BUFFER_SIZE];
+
+        try {
+            dataSocket = establishDataConnection();
+            dataSocketOutStream = new DataOutputStream(dataSocket.getOutputStream());
+        } catch (Exception e) {
+            try {
+                // Close data socket
+                dataSocketOutStream.close();
+                dataSocket.close();
+
+                fileUploadedInStream.close();
+            } catch (Exception se) {
+                // Silently ignore the exception
+            }
+
+            System.out.println("Error establishing data connection!");
+            return;
+        }
+
+        int byteSent;
+        int errorOccured = 0;
+
+        while (true) {
+            try {
+                byteSent = fileUploadedInStream.read(buffer, 0, BUFFER_SIZE);
+            } catch (Exception e) {
+                errorOccured = 1;
+                break;
+            }
+
+            if (byteSent == -1) {
+                break;
+            }
+
+            try {
+                dataSocketOutStream.write(buffer, 0, byteSent);
+                dataSocketOutStream.flush();
+            } catch (Exception e) {
+                errorOccured = 2;
+                break;
+            }
+
+        }
+
+        try {
+            fileUploadedInStream.close();
+
+            dataSocketOutStream.close();
+            dataSocket.close();
+        } catch (Exception e) {
+            // Silently ignore this error
+        }
+
+        if (errorOccured == 2) {
+            System.out.println("Error uploading file to server!");
+        } else if (errorOccured == 1) {
+            System.out.println("Error accessing uploaded file data in computer!");
+        }
+
+        ftpResponse = getResponse();
+
+        // File uploaded succesfully, without any error
+        if (ftpResponse.code == FTPResponseCode.DATA_TRANSFER_COMPLETED && errorOccured == 0) {
+            System.out.println(String.format("File '%s' has been uploaded successfully", fileNameOnLocal));
+            return;
+        }
+
+        // Otherwise, error occurs
+        if (ftpResponse.code == FTPResponseCode.DATA_CONNECTION_OPEN_FAILED) {
+            System.out.println("Error uploading file data from server!");
+        } else if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        }
+
+        if (ftpResponse.code != FTPResponseCode.DATA_TRANSFER_COMPLETED){
+            close();
+            throw new AutoTerminatedException("Invalid response from server");
+        } else {
+            // Error occurs during file transmission period, but server regards it as correct transmission
+            // the file uploaded to server is corrupted.
+            // Therefore, we should issue a request to delete it
+
+            sendRequest(FTPRequestCode.DELETE + " " + fileNameOnServer);
+
+            ftpResponse = getResponse();
+
+            if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+                close();
+                throw new AutoTerminatedException("Server automatically logged out");
+            }
+
+        }
+
+    }
+
+    private void deletePath(ArrayList<String> commandArguments)
+            throws InvalidCommandException, AutoTerminatedException
+    {
+        if (commandArguments.size() != 1) {
+            throw new InvalidCommandException();
+        }
+
+        sendRequest(FTPRequestCode.DELETE + " " + commandArguments.get(0));
+
+        FTPResponse ftpResponse = getResponse();
+
+        if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        }
+
+        if (ftpResponse.code == FTPResponseCode.REQUEST_ACTION_DONE) {
+            return;
+        }
+
+        if (ftpResponse.code == FTPResponseCode.REQUEST_ACTION_FAILED) {
+            System.out.println(ftpResponse.message);
+            return;
+        }
+
+        // Invalid response
+        close();
+        throw new AutoTerminatedException("Invalid response from server");
     }
 
 }
