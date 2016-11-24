@@ -354,7 +354,7 @@ public class FTPClient {
 
     private Socket establishDataConnection() throws Exception {
         ServerSocket serverDataSocket = new ServerSocket(dataPort);
-        serverDataSocket.setSoTimeout(4000);
+        serverDataSocket.setSoTimeout(20000);
 
         Socket dataSocket = serverDataSocket.accept();
 
@@ -471,6 +471,8 @@ public class FTPClient {
             } catch (Exception se) {
                 // Silently ignore the exception
             }
+
+            e.printStackTrace();
 
             System.out.println("Error establishing data connection!");
             return;
@@ -664,6 +666,8 @@ public class FTPClient {
             } catch (Exception se) {
                 // Silently ignore the exception
             }
+
+            e.printStackTrace();
 
             System.out.println("Error establishing data connection!");
             return;
