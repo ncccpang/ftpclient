@@ -316,7 +316,7 @@ public class FTPClient {
         if (clientCommand.code.equals("get")) {
             downloadFile(clientCommand.arguments);
         } else if (clientCommand.code.equals("put")) {
-
+            uploadFile(clientCommand.arguments);
         }
 
     }
@@ -356,6 +356,13 @@ public class FTPClient {
         serverDataSocket.setSoTimeout(4000);
 
         Socket dataSocket = serverDataSocket.accept();
+
+        // Close the serverSocket. This will not affect the socket created through accept()
+        try {
+            serverDataSocket.close();
+        } catch (Exception e) {
+            // Silently ignore the exception
+        }
 
         return dataSocket;
     }
@@ -441,6 +448,8 @@ public class FTPClient {
             dataInputStream = new DataInputStream(dataSocket.getInputStream());
         } catch (Exception e) {
             try {
+                e.printStackTrace();
+
                 // Close data socket
                 dataInputStream.close();
                 dataSocket.close();
@@ -526,6 +535,12 @@ public class FTPClient {
         } else {
             throw new AutoTerminatedException("Invalid response from server");
         }
+
+    }
+
+    private void uploadFile(ArrayList<String> commandArguments)
+            throws InvalidCommandException, AutoTerminatedException
+    {
 
     }
 
