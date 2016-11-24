@@ -496,19 +496,34 @@ public class FTPClient {
             // Silently ignore this error
         }
 
-        if (errorOccured == 0) {
-            System.out.println("File downloaded successfully!");
+        if (errorOccured == 2) {
+            System.out.println("Error saving downloaded file to computer!");
+        } else if (errorOccured == 1) {
+            System.out.println("Error retrieving file data from server!");
         }
 
-        // Expect to get FTP 226 response from server
         ftpResponse = getResponse();
 
-        if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
-            close();
-            throw new AutoTerminatedException("Server automatically logged out");
+        // File download succesfully, without any error
+        if (ftpResponse.code == FTPResponseCode.DATA_TRANSFER_COMPLETED) {
+            System.out.println(String.format("File '%s' has been downloaded successfully", commandArugments.get(0)));
+            return;
         }
 
-        if (ftpResponse.code != FTPResponseCode.DATA_TRANSFER_COMPLETED) {
+        // Otherwise, downloaded file has error and need deleting
+        try {
+            fileOut.delete();
+        } catch (Exception e) {
+            // Silently ignore the exception
+        }
+
+        if (ftpResponse.code == FTPResponseCode.DATA_CONNECTION_OPEN_FAILED) {
+            System.out.println("Error retrieving file data from server!");
+            return;
+        } else if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        } else {
             throw new AutoTerminatedException("Invalid response from server");
         }
 
