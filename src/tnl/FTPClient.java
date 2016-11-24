@@ -124,7 +124,7 @@ public class FTPClient {
                 return;
             }
 
-            code = request.substring(0, index).toUpperCase();
+            code = request.substring(0, index).toLowerCase();
             if (!CLIENT_COMMAND_CODES.contains(code)) {
                 throw new InvalidCommandException();
             }
