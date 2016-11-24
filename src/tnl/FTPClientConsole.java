@@ -40,7 +40,7 @@ public class FTPClientConsole {
             return;
         }
 
-        System.out.println("Absolute path to Client base directory: ");
+        System.out.print("Absolute path to Client base directory: ");
         clientDirectory = scanConsole.nextLine();
 
         try {

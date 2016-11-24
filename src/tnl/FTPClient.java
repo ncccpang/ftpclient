@@ -203,9 +203,9 @@ public class FTPClient {
         this.port = port;
         this.clientDirectory = Paths.get(clientDirectory);
 
-        this.dataPort = port + 1;
-
         socket = new Socket(host, port);
+
+        this.dataPort = socket.getLocalPort() + 1;
 
         inputStream = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         outputStream = new PrintWriter(socket.getOutputStream(), true);
@@ -433,19 +433,19 @@ public class FTPClient {
         }
 
         Socket dataSocket = null;
-        DataInputStream dataInputStream;
+        DataInputStream dataInputStream = null;
         byte[] buffer = new byte[BUFFER_SIZE];
 
         try {
             dataSocket = establishDataConnection();
             dataInputStream = new DataInputStream(dataSocket.getInputStream());
         } catch (Exception e) {
-
-            // Close data socket, if already created. Ignore the exception
             try {
-                if (dataSocket != null) {
-                    dataSocket.close();
-                }
+                // Close data socket
+                dataInputStream.close();
+                dataSocket.close();
+
+                fileOutStream.close();
             } catch (Exception se) {
                 // Silently ignore the exception
             }
