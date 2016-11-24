@@ -432,7 +432,7 @@ public class FTPClient {
             return;
         }
 
-        Socket dataSocket;
+        Socket dataSocket = null;
         DataInputStream dataInputStream;
         byte[] buffer = new byte[BUFFER_SIZE];
 
@@ -440,6 +440,16 @@ public class FTPClient {
             dataSocket = establishDataConnection();
             dataInputStream = new DataInputStream(dataSocket.getInputStream());
         } catch (Exception e) {
+
+            // Close data socket, if already created. Ignore the exception
+            try {
+                if (dataSocket != null) {
+                    dataSocket.close();
+                }
+            } catch (Exception se) {
+                // Silently ignore the exception
+            }
+
             System.out.println("Error establishing data connection!");
             return;
         }
