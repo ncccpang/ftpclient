@@ -18,7 +18,6 @@ public class FTPClient {
         public String message;
 
 
-
         public FTPResponse(String response) throws Exception {
             int firstSpaceIndex = response.indexOf(" ");
             String codeStr;
@@ -46,7 +45,6 @@ public class FTPClient {
     }
 
 
-
     private static class FTPResponseCode {
         public static final int SIGNAL_DATA_CONNECTION_OPEN = 150;
 
@@ -56,7 +54,7 @@ public class FTPClient {
         public static final int DATA_TRANSFER_COMPLETED = 226;
         public static final int DATA_CONNECTION_OPEN_DONE = 200;
 
-        public static final int  ENTER_PASS = 331;
+        public static final int ENTER_PASS = 331;
 
         public static final int FORCED_LOGGED_OUT = 421;
         public static final int DATA_CONNECTION_OPEN_FAILED = 425;
@@ -66,7 +64,7 @@ public class FTPClient {
 
         public static final int SYNTAX_ERROR = 501;
 
-        private static final List<Integer> RESPONSE_CODES = Arrays.asList(new Integer[] {
+        private static final List<Integer> RESPONSE_CODES = Arrays.asList(new Integer[]{
                 150,
                 230, 221, 250, 226, 200,
                 331,
@@ -75,13 +73,11 @@ public class FTPClient {
         });
 
 
-
         public static boolean isValidCode(int code) {
             return RESPONSE_CODES.contains(code);
         }
 
     }
-
 
 
     private static class FTPRequestCode {
@@ -102,7 +98,6 @@ public class FTPClient {
 
         public static final String LOGOUT = "QUIT";
     }
-
 
 
     private class ClientCommand {
@@ -169,16 +164,15 @@ public class FTPClient {
     }
 
 
-    private static List<String> CLIENT_COMMAND_CODES = Arrays.asList(new String[] {
-        "ls", "cd",
-         "mkdir", "rm",
-         "get", "put"
+    private static List<String> CLIENT_COMMAND_CODES = Arrays.asList(new String[]{
+            "ls", "cd",
+            "mkdir", "rm",
+            "get", "put"
     });
 
     private final Charset ENCODING_UTF8 = Charset.forName("UTF-8");
 
     private final int BUFFER_SIZE = 1024;
-
 
 
     private Scanner scanConsole;
@@ -196,15 +190,14 @@ public class FTPClient {
     private boolean userNameProvided;
 
 
-
-    public FTPClient(String host, int port, String clientDirectory) throws Exception {
+    public FTPClient(String host, int port, int dataPort, String clientDirectory) throws Exception {
         this.host = host;
         this.port = port;
         this.clientDirectory = Paths.get(clientDirectory);
 
         socket = new Socket(host, port);
 
-        this.dataPort = socket.getLocalPort() + 1;
+        this.dataPort = dataPort;
 
         inputStream = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         outputStream = new PrintWriter(socket.getOutputStream(), true);
@@ -214,7 +207,6 @@ public class FTPClient {
 
         scanConsole = new Scanner(System.in);
     }
-
 
 
     // TRUE = Command done with execution, FALSE = Command failed
@@ -283,10 +275,9 @@ public class FTPClient {
     }
 
 
-
     public void close() {
         try {
-            outputStream.println("QUIT");
+            sendRequest(FTPRequestCode.LOGOUT);
 
             inputStream.close();
             outputStream.close();
@@ -300,10 +291,8 @@ public class FTPClient {
     }
 
 
-
     public void executeCommand(String command)
-            throws InvalidCommandException, AutoTerminatedException
-    {
+            throws InvalidCommandException, AutoTerminatedException {
         ClientCommand clientCommand;
 
         try {
@@ -314,10 +303,19 @@ public class FTPClient {
 
         if (clientCommand.code.equals("get")) {
             downloadFile(clientCommand.arguments);
+
         } else if (clientCommand.code.equals("put")) {
             uploadFile(clientCommand.arguments);
+
         } else if (clientCommand.code.equals("rm")) {
             deletePath(clientCommand.arguments);
+
+        } else if (clientCommand.code.equals("mkdir")) {
+            createNewDirectory(clientCommand.arguments);
+
+        } else if (clientCommand.code.equals("cd")) {
+            changeCurrentDirectoryOnServer(clientCommand.arguments);
+
         }
 
     }
@@ -354,6 +352,8 @@ public class FTPClient {
 
     private Socket establishDataConnection() throws Exception {
         ServerSocket serverDataSocket = new ServerSocket(dataPort);
+
+        // Wait long enough to prevent immature timeout
         serverDataSocket.setSoTimeout(20000);
 
         Socket dataSocket = serverDataSocket.accept();
@@ -369,8 +369,7 @@ public class FTPClient {
     }
 
     private void downloadFile(ArrayList<String> commandArguments)
-            throws InvalidCommandException, AutoTerminatedException
-    {
+            throws InvalidCommandException, AutoTerminatedException {
         if (commandArguments.size() < 1 || commandArguments.size() > 2) {
             throw new InvalidCommandException();
         }
@@ -547,8 +546,7 @@ public class FTPClient {
     }
 
     private void uploadFile(ArrayList<String> commandArguments)
-            throws InvalidCommandException, AutoTerminatedException
-    {
+            throws InvalidCommandException, AutoTerminatedException {
         if (commandArguments.size() < 1 || commandArguments.size() > 2) {
             throw new InvalidCommandException();
         }
@@ -729,7 +727,7 @@ public class FTPClient {
             throw new AutoTerminatedException("Server automatically logged out");
         }
 
-        if (ftpResponse.code != FTPResponseCode.DATA_TRANSFER_COMPLETED){
+        if (ftpResponse.code != FTPResponseCode.DATA_TRANSFER_COMPLETED) {
             close();
             throw new AutoTerminatedException("Invalid response from server");
         } else {
@@ -751,8 +749,7 @@ public class FTPClient {
     }
 
     private void deletePath(ArrayList<String> commandArguments)
-            throws InvalidCommandException, AutoTerminatedException
-    {
+            throws InvalidCommandException, AutoTerminatedException {
         if (commandArguments.size() != 1) {
             throw new InvalidCommandException();
         }
@@ -771,7 +768,7 @@ public class FTPClient {
         }
 
         if (ftpResponse.code == FTPResponseCode.REQUEST_ACTION_FAILED) {
-            System.out.println(ftpResponse.message);
+            System.out.println(ftpResponse.message + "!");
             return;
         }
 
@@ -779,5 +776,71 @@ public class FTPClient {
         close();
         throw new AutoTerminatedException("Invalid response from server");
     }
+
+    private void createNewDirectory(ArrayList<String> commandArguments)
+            throws InvalidCommandException, AutoTerminatedException {
+        if (commandArguments.size() != 1) {
+            throw new InvalidCommandException();
+        }
+
+        sendRequest(FTPRequestCode.MAKE_NEW_DIRECTORY + " " + commandArguments.get(0));
+
+        FTPResponse ftpResponse = getResponse();
+
+        if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        }
+
+        if (ftpResponse.code == FTPResponseCode.REQUEST_ACTION_DONE) {
+            return;
+        }
+
+        if (ftpResponse.code == FTPResponseCode.REQUEST_ACTION_FAILED) {
+            System.out.println(ftpResponse.message + "!");
+            return;
+        }
+
+        // Invalid response
+        close();
+        throw new AutoTerminatedException("Invalid response from server");
+
+    }
+
+    private void changeCurrentDirectoryOnServer(ArrayList<String> commandArguments)
+            throws InvalidCommandException, AutoTerminatedException
+    {
+        if (commandArguments.size() > 1) {
+            throw new InvalidCommandException();
+        }
+
+        if (commandArguments.size() == 0) {
+            sendRequest(FTPRequestCode.GOTO_DIRECTORY);
+        } else {
+            sendRequest(FTPRequestCode.GOTO_DIRECTORY + " " + commandArguments.get(0));
+        }
+
+        FTPResponse ftpResponse = getResponse();
+
+        if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        }
+
+        if (ftpResponse.code == FTPResponseCode.REQUEST_ACTION_DONE) {
+            return;
+        }
+
+        if (ftpResponse.code == FTPResponseCode.REQUEST_ACTION_FAILED) {
+            System.out.println(ftpResponse.message + "!");
+            return;
+        }
+
+        // Invalid response
+        close();
+        throw new AutoTerminatedException("Invalid response from server");
+
+    }
+
 
 }

@@ -16,7 +16,7 @@ public class FTPClientConsole {
 
     public static void main(String[] argv) {
         String host;
-        int port;
+        int port, dataPort;
         String clientDirectory;
 
         System.out.println("FTP Client");
@@ -31,6 +31,19 @@ public class FTPClientConsole {
 
         try {
             port = scanConsole.nextInt();
+
+            // Consume the '\n' character in order to prepare for the next nextLine()
+            scanConsole.nextLine();
+        } catch (Exception e) {
+            System.out.println("\nInvalid port number! Terminated.");
+
+            return;
+        }
+
+        System.out.print("Port number for data transmission (please make sure this port is free): ");
+
+        try {
+            dataPort = scanConsole.nextInt();
 
             // Consume the '\n' character in order to prepare for the next nextLine()
             scanConsole.nextLine();
@@ -57,7 +70,7 @@ public class FTPClientConsole {
 
         // Try connecting to server
         try {
-            ftpClient = new FTPClient(host, port, clientDirectory);
+            ftpClient = new FTPClient(host, port, dataPort, clientDirectory);
         } catch (Exception e) {
             System.out.println(String.format("Cannot connect to %s:%d! Terminated.", host, port));
 
