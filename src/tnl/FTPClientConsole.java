@@ -9,6 +9,11 @@ import tnl.FTPClient;
 
 
 public class FTPClientConsole {
+    private static final String DEFAULT_HOST_ADDRESS = "localhost";
+    private static final int DEFAULT_HOST_PORT = 6788;
+
+
+
     private static Scanner scanConsole = new Scanner(System.in);
     private static FTPClient ftpClient;
 
@@ -24,29 +29,39 @@ public class FTPClientConsole {
         System.out.println("");
 
         // Input Host, Port, Client directory
-        System.out.print("Host IP/domain name: ");
-        host = scanConsole.nextLine();
+        System.out.print("Host IP/domain name (leave blank for default: " + DEFAULT_HOST_ADDRESS + "): ");
+        host = scanConsole.nextLine().trim();
 
-        System.out.print("Host port number: ");
-
-        try {
-            port = scanConsole.nextInt();
-
-            // Consume the '\n' character in order to prepare for the next nextLine()
-            scanConsole.nextLine();
-        } catch (Exception e) {
-            System.out.println("\nInvalid port number! Terminated.");
-
-            return;
+        if (host.equals("")) {
+            host = DEFAULT_HOST_ADDRESS;
         }
 
-        System.out.print("Port number for data transmission (please make sure this port is free): ");
+        System.out.print("Host port number: (leave blank for default: " + DEFAULT_HOST_PORT + "): ");
+        String textInput = scanConsole.nextLine().trim();
+
+        if (textInput.equals("")) {
+            port = DEFAULT_HOST_PORT;
+        } else {
+            try {
+                port = Integer.parseInt(textInput);
+            } catch (Exception e) {
+                System.out.println("\nInvalid port number! Terminated.");
+
+                return;
+            }
+
+        }
+
+        System.out.print("Port number for data transmission (Maximum port is 65535. Make sure your inputted port is free): ");
+        textInput = scanConsole.nextLine().trim();
 
         try {
-            dataPort = scanConsole.nextInt();
+            dataPort = Integer.parseInt(textInput);
 
-            // Consume the '\n' character in order to prepare for the next nextLine()
-            scanConsole.nextLine();
+            if (dataPort > 65535) {
+                throw new Exception();
+            }
+
         } catch (Exception e) {
             System.out.println("\nInvalid port number! Terminated.");
 
@@ -57,11 +72,12 @@ public class FTPClientConsole {
         clientDirectory = scanConsole.nextLine();
 
         try {
-            if (!Files.isDirectory(Paths.get(clientDirectory))) {
+            if (!Paths.get(clientDirectory).toRealPath().toFile().isDirectory()) {
                 System.out.println("Invalid path! Terminated");
 
                 return;
             }
+
         } catch (Exception e) {
             System.out.println("Invalid path! Terminated");
 
