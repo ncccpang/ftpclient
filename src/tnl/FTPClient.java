@@ -182,12 +182,14 @@ public class FTPClient {
     private int dataPort;
     private Path clientDirectory;
 
+    private String currentServerPath;
+
     private Socket socket;
     private BufferedReader inputStream;
     private PrintWriter outputStream;
 
     private boolean hasLoggedIn;
-    private boolean userNameProvided;
+    private String username;
 
 
     public FTPClient(String host, int port, int dataPort, String clientDirectory) throws Exception {
@@ -203,7 +205,9 @@ public class FTPClient {
         outputStream = new PrintWriter(socket.getOutputStream(), true);
 
         hasLoggedIn = false;
-        userNameProvided = false;
+        username = null;
+
+        currentServerPath = "";
 
         scanConsole = new Scanner(System.in);
     }
@@ -216,9 +220,9 @@ public class FTPClient {
             throw new InvalidCommandException();
         }
 
-        userNameProvided = true;
+        this.username = username;
 
-        sendRequest(FTPRequestCode.USERNAME + " " + username);
+        sendRequest(FTPRequestCode.USERNAME, username);
 
         FTPResponse ftpResponse;
         try {
@@ -245,11 +249,11 @@ public class FTPClient {
 
 
     public boolean loginWithPassword(String password) throws Exception {
-        if (hasLoggedIn || !userNameProvided) {
+        if (hasLoggedIn || username == null) {
             throw new InvalidCommandException();
         }
 
-        sendRequest(FTPRequestCode.PASSWORD + " " + password);
+        sendRequest(FTPRequestCode.PASSWORD, password);
 
         FTPResponse ftpResponse;
         try {
@@ -272,6 +276,14 @@ public class FTPClient {
 
     public boolean isLoggedIn() {
         return hasLoggedIn;
+    }
+
+    public String getStatusHeader() {
+        return String.format(
+                "%s@%s:%s %s%s",
+                username, host, port,
+                File.separator, currentServerPath
+        );
     }
 
 
@@ -320,8 +332,21 @@ public class FTPClient {
 
     }
 
-    private void sendRequest(String request) throws AutoTerminatedException {
-        outputStream.println(request);
+    private void sendRequest(String request, String... arguments) throws AutoTerminatedException {
+        String finalRequest = request;
+
+        for (String arg: arguments) {
+            finalRequest += " ";
+
+            if (arg.indexOf(' ') == -1) {
+                finalRequest += arg;
+            } else {
+                finalRequest += ('"' + arg + '"');
+            }
+
+        }
+
+        outputStream.println(finalRequest);
 
         if (outputStream.checkError()) {
             throw new AutoTerminatedException("Error sending request to server");
@@ -402,9 +427,9 @@ public class FTPClient {
 
         // Ask Server to open port
         sendRequest(
-                FTPRequestCode.OPEN_DATA_CONNECTION + " "
-                        + socket.getInetAddress().getHostAddress() + " "
-                        + dataPort
+                FTPRequestCode.OPEN_DATA_CONNECTION,
+                socket.getInetAddress().getHostAddress(),
+                String.valueOf(dataPort)
         );
 
         ftpResponse = getResponse();
@@ -420,7 +445,7 @@ public class FTPClient {
         }
 
         // Send real File-Downloading request
-        sendRequest(FTPRequestCode.DOWNLOAD_FILE + " " + fileNameOnServer);
+        sendRequest(FTPRequestCode.DOWNLOAD_FILE, fileNameOnServer);
 
         ftpResponse = getResponse();
 
@@ -562,7 +587,7 @@ public class FTPClient {
 
         // See if the uploaded file exists or not
         if (!fileUploaded.exists()) {
-            System.out.print(String.format(
+            System.out.println(String.format(
                     "File '%s' does not exist in your client directory!",
                     fileNameOnLocal
             ));
@@ -574,9 +599,9 @@ public class FTPClient {
 
         // Ask Server to open port
         sendRequest(
-                FTPRequestCode.OPEN_DATA_CONNECTION + " "
-                        + socket.getInetAddress().getHostAddress() + " "
-                        + dataPort
+                FTPRequestCode.OPEN_DATA_CONNECTION,
+                socket.getInetAddress().getHostAddress(),
+                String.valueOf(dataPort)
         );
 
         ftpResponse = getResponse();
@@ -592,7 +617,7 @@ public class FTPClient {
         }
 
         // Try sending upload-no-overwrite request first
-        sendRequest(FTPRequestCode.UPLOAD_FILE_NO_OVERWITE + " " + fileNameOnServer);
+        sendRequest(FTPRequestCode.UPLOAD_FILE_NO_OVERWITE, fileNameOnServer);
 
         ftpResponse = getResponse();
 
@@ -622,7 +647,7 @@ public class FTPClient {
             }
 
             // If user wants to overwrite the file on the server, then send upload-overwrite request
-            sendRequest(FTPRequestCode.UPLOAD_FILE_OVERWRITE + " " + fileNameOnServer);
+            sendRequest(FTPRequestCode.UPLOAD_FILE_OVERWRITE, fileNameOnServer);
 
             ftpResponse = getResponse();
 
@@ -735,7 +760,7 @@ public class FTPClient {
             // the file uploaded to server is corrupted.
             // Therefore, we should issue a request to delete it
 
-            sendRequest(FTPRequestCode.DELETE + " " + fileNameOnServer);
+            sendRequest(FTPRequestCode.DELETE, fileNameOnServer);
 
             ftpResponse = getResponse();
 
@@ -754,7 +779,7 @@ public class FTPClient {
             throw new InvalidCommandException();
         }
 
-        sendRequest(FTPRequestCode.DELETE + " " + commandArguments.get(0));
+        sendRequest(FTPRequestCode.DELETE, commandArguments.get(0));
 
         FTPResponse ftpResponse = getResponse();
 
@@ -783,7 +808,7 @@ public class FTPClient {
             throw new InvalidCommandException();
         }
 
-        sendRequest(FTPRequestCode.MAKE_NEW_DIRECTORY + " " + commandArguments.get(0));
+        sendRequest(FTPRequestCode.MAKE_NEW_DIRECTORY, commandArguments.get(0));
 
         FTPResponse ftpResponse = getResponse();
 
@@ -817,7 +842,7 @@ public class FTPClient {
         if (commandArguments.size() == 0) {
             sendRequest(FTPRequestCode.GOTO_DIRECTORY);
         } else {
-            sendRequest(FTPRequestCode.GOTO_DIRECTORY + " " + commandArguments.get(0));
+            sendRequest(FTPRequestCode.GOTO_DIRECTORY, commandArguments.get(0));
         }
 
         FTPResponse ftpResponse = getResponse();
@@ -828,6 +853,8 @@ public class FTPClient {
         }
 
         if (ftpResponse.code == FTPResponseCode.REQUEST_ACTION_DONE) {
+            currentServerPath = ftpResponse.message.trim();
+
             return;
         }
 

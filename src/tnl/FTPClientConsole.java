@@ -135,11 +135,12 @@ public class FTPClientConsole {
         System.out.println("\nLogin is successful!\n");
         System.out.println("Type help/h/H for help");
         System.out.println("Type exit to exit the program");
+        System.out.println();
 
         String command;
 
         while (ftpClient.isLoggedIn()) {
-            System.out.print("> ");
+            System.out.print(String.format("%s> ", ftpClient.getStatusHeader()));
             command = scanConsole.nextLine().trim();
 
             if (command.equals("")) {
