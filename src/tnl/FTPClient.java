@@ -328,6 +328,9 @@ public class FTPClient {
         } else if (clientCommand.code.equals("cd")) {
             changeCurrentDirectoryOnServer(clientCommand.arguments);
 
+        } else if (clientCommand.code.equals("ls")) {
+            listContentInDirectory(clientCommand.arguments);
+
         }
 
     }
@@ -495,8 +498,6 @@ public class FTPClient {
             } catch (Exception se) {
                 // Silently ignore the exception
             }
-
-            e.printStackTrace();
 
             System.out.println("Error establishing data connection!");
             return;
@@ -690,8 +691,6 @@ public class FTPClient {
                 // Silently ignore the exception
             }
 
-            e.printStackTrace();
-
             System.out.println("Error establishing data connection!");
             return;
         }
@@ -869,5 +868,133 @@ public class FTPClient {
 
     }
 
+    private void listContentInDirectory(ArrayList<String> commandArguments)
+            throws InvalidCommandException, AutoTerminatedException {
+        if (commandArguments.size() != 0) {
+            throw new InvalidCommandException();
+        }
 
+        FTPResponse ftpResponse;
+
+        // Ask Server to open port
+        sendRequest(
+                FTPRequestCode.OPEN_DATA_CONNECTION,
+                socket.getInetAddress().getHostAddress(),
+                String.valueOf(dataPort)
+        );
+
+        ftpResponse = getResponse();
+
+        if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        }
+
+        if (ftpResponse.code != FTPResponseCode.DATA_CONNECTION_OPEN_DONE) {
+            close();
+            throw new AutoTerminatedException("Invalid response from server");
+        }
+
+        // Send real request
+        sendRequest(FTPRequestCode.LIST_FILE_DIRECTORY);
+
+        ftpResponse = getResponse();
+
+        if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        }
+
+        // Current directory not exist on server anymore. Terminated
+        if (ftpResponse.code == FTPResponseCode.REQUEST_ACTION_FAILED) {
+            System.out.println("Current directory does not exist on server anymore!");
+
+            return;
+        }
+
+        if (ftpResponse.code != FTPResponseCode.SIGNAL_DATA_CONNECTION_OPEN) {
+            close();
+            throw new AutoTerminatedException("Invalid response from server");
+        }
+
+        ByteArrayOutputStream byteRetrievedOutStream = new ByteArrayOutputStream();
+
+        Socket dataSocket = null;
+        DataInputStream dataSocketInpStream = null;
+        byte[] buffer = new byte[BUFFER_SIZE];
+
+        try {
+            dataSocket = establishDataConnection();
+            dataSocketInpStream = new DataInputStream(dataSocket.getInputStream());
+        } catch (Exception e) {
+            try {
+                // Close data socket
+                dataSocketInpStream.close();
+                dataSocket.close();
+
+                byteRetrievedOutStream.close();
+            } catch (Exception se) {
+                // Silently ignore the exception
+            }
+
+            System.out.println("Error establishing data connection!");
+            return;
+        }
+
+        int byteReceived;
+        int errorOccured = 0;
+
+        while (true) {
+            try {
+                byteReceived = dataSocketInpStream.read(buffer, 0, BUFFER_SIZE);
+            } catch (Exception e) {
+                errorOccured = 2;
+                break;
+            }
+
+            if (byteReceived == -1) {
+                break;
+            }
+
+            byteRetrievedOutStream.write(buffer, 0, byteReceived);
+        }
+
+        try {
+            dataSocketInpStream.close();
+            dataSocket.close();
+        } catch (Exception e) {
+            // Silently ignore this error
+        }
+
+        if (errorOccured == 2) {
+            System.out.println("Error retrieving list of files and directories from server!");
+        }
+
+        ftpResponse = getResponse();
+
+        // Directory & File list retrieved succesfully, without any error
+        if (ftpResponse.code == FTPResponseCode.DATA_TRANSFER_COMPLETED && errorOccured == 0) {
+            try {
+                // Print out the result
+                System.out.println(byteRetrievedOutStream.toString(ENCODING_UTF8.name()));
+
+            } catch (Exception e) {
+                // Silently ignore this exception, as it will never happen
+            }
+
+            return;
+        }
+
+        if (ftpResponse.code == FTPResponseCode.DATA_TRANSFER_ERROR) {
+            System.out.println("Error retrieving list of files and directories from server!");
+            return;
+        } else if (ftpResponse.code == FTPResponseCode.FORCED_LOGGED_OUT) {
+            close();
+            throw new AutoTerminatedException("Server automatically logged out");
+        } else {
+            close();
+            throw new AutoTerminatedException("Invalid response from server");
+        }
+
+    }
 }
